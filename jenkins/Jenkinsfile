@@ -1,0 +1,103 @@
+pipeline {
+    agent {
+        kubernetes {
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: jenkins
+  securityContext:
+    runAsUser: 0
+  containers:
+    - name: dind
+      image: docker:24.0.7-dind
+      securityContext:
+        privileged: true
+        runAsUser: 0
+      env:
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
+"""
+            defaultContainer 'dind'
+        }
+    }
+
+    environment {
+        AWS_REGION    = 'ap-northeast-2'
+        ECR_REPO_URI  = credentials('forever-kafka-stream-ecr-uri')
+        ECR_REPO      = credentials('forever-kafka-stream-ecr')
+        BRANCH_NAME   = "${env.GIT_BRANCH}".replaceAll('/', '-')
+        JAVA_HOME     = "/usr/lib/jvm/java-17-openjdk"
+        PATH          = "${env.JAVA_HOME}/bin:${env.PATH}"
+    }
+
+    stages {
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    apk update
+                    apk add --no-cache \
+                        curl unzip git openjdk17 sudo bash coreutils binutils \
+                        python3 py3-pip make cmake gcc g++ libc-dev libffi-dev openssl-dev \
+                        aws-cli
+
+                    mkdir -p ~/.docker/cli-plugins/
+                    curl -SL https://github.com/docker/buildx/releases/download/v0.14.0/buildx-v0.14.0.linux-amd64 -o ~/.docker/cli-plugins/docker-buildx
+                    chmod +x ~/.docker/cli-plugins/docker-buildx
+                    docker buildx version
+
+                    aws --version
+                    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO
+                '''
+            }
+        }
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Set Build Vars') {
+            steps {
+                script {
+                    COMMIT_HASH = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    BUILD_TAG   = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}-${COMMIT_HASH}"
+                    env.COMMIT_HASH = COMMIT_HASH
+                    env.BUILD_TAG = BUILD_TAG
+                }
+            }
+        }
+
+        stage('Login to ECR') {
+            steps {
+                sh '''
+                    aws ecr get-login-password --region $AWS_REGION | \
+                    docker login --username AWS --password-stdin $ECR_REPO
+                '''
+            }
+        }
+
+        stage('Gradle Build') {
+            steps {
+                sh './gradlew clean'
+                sh './gradlew test'
+                sh './gradlew build --no-daemon'
+            }
+        }
+
+        stage('Docker Buildx Build & Push') {
+            steps {
+                sh '''
+                    env | grep AWS
+                    cat ~/.aws/credentials || echo "no credentials file"
+                    aws sts get-caller-identity
+
+                    export DOCKER_BUILDKIT=1
+
+                    docker build --push -t $ECR_REPO_URI:${BUILD_TAG} -t $ECR_REPO_URI:latest .
+                '''
+            }
+        }
+    }
+}
