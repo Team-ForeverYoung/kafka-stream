@@ -82,7 +82,7 @@ spec:
             steps {
                 sh './gradlew clean'
                 sh './gradlew test'
-                sh './gradlew build --no-daemon'
+                sh './gradlew shadowJar --no-daemon'
             }
         }
 
