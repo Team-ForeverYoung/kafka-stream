@@ -66,7 +66,7 @@ public class Main {
 		source.filter((key, value) -> {
 			try {
 				JsonNode jsonNode = objectMapper.readTree(value);
-				boolean match = TOPIC_2.equals(jsonNode.path("topic").asText());
+				boolean match = TOPIC_3.equals(jsonNode.path("topic").asText());
 				if (match) {
 					log.info("[{}] 라우팅: {}", TOPIC_3, value);
 				}
