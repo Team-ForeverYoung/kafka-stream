@@ -21,6 +21,7 @@ public class Main {
 	private static final String STREAM_SERVER_ID = "outbox-event-router-server";
 	private static final String TOPIC_1 = "promotion_event";
 	private static final String TOPIC_2 = "promotion_result";
+	private static final String TOPIC_3 = "user_point";
 	private static final Logger log = LoggerFactory.getLogger(Main.class);
 
 	public static void main(String[] args) {
@@ -62,6 +63,19 @@ public class Main {
 				return false;
 			}
 		}).to(TOPIC_2);
+		source.filter((key, value) -> {
+			try {
+				JsonNode jsonNode = objectMapper.readTree(value);
+				boolean match = TOPIC_2.equals(jsonNode.path("topic").asText());
+				if (match) {
+					log.info("[{}] 라우팅: {}", TOPIC_3, value);
+				}
+				return match;
+			} catch (Exception e) {
+				log.error("JSON 파싱 실패 ({}): {}", TOPIC_3, value, e);
+				return false;
+			}
+		}).to(TOPIC_3);
 
 		Topology topology = streamsBuilder.build();
 		KafkaStreams streams = new KafkaStreams(topology, config);
