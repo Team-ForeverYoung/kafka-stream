@@ -18,6 +18,7 @@ public class Main {
 
 	private static final String BOOTSTRAP_SERVER = "kafka.kafka.svc.cluster.local:9092";
 	private static final String SOURCE_TOPIC = "forever_mysql_db.forever_mysql_db.outbox_event";
+	private static final String AURORA_SOURCE_TOPIC = "forever_mysql_db_aurora.forever_mysql_db.outbox_event";
 	private static final String STREAM_SERVER_ID = "outbox-event-router-server";
 	private static final String TOPIC_1 = "promotion_event";
 	private static final String TOPIC_2 = "promotion_result";
@@ -34,7 +35,7 @@ public class Main {
 		config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
 		StreamsBuilder streamsBuilder = new StreamsBuilder();
-		KStream<String, String> source = streamsBuilder.stream(SOURCE_TOPIC);
+		KStream<String, String> source = streamsBuilder.stream(AURORA_SOURCE_TOPIC);
 
 		source.filter((key, value) -> {
 			try {
